@@ -1,0 +1,56 @@
+# MagicSquare_1004 — Cursor Rules (세션 3 초안)
+
+## 프로젝트
+4×4 부분 마방진. Mom Test 진짜 문제: 10선 합 34 판정 누락(특히 대각선)으로 틀린 완료를 붙잡는 시간 낭비.
+세션 3 범위: Rule · Command `validate_lines` · (Skill) · Test Loop.
+
+## 도메인 (SSOT)
+- 격자: 4×4 `list[list[int]]`
+- 셀 값: `0` = 빈칸, `1~16` = 채워진 칸
+- 마법 상수: `34`
+- 10선 ID (1-index 표기):
+  - 행 `R1`~`R4`, 열 `C1`~`C4`
+  - 주대각 `D1` (↘), 부대각 `D2` (↙)
+- 빈칸(0)이 하나라도 있으면 완성 검증 불가 → `incomplete`
+
+## 핵심 API
+```python
+def validate_lines(grid: list[list[int]]) -> dict:
+    # {"status": "pass" | "fail" | "incomplete", "failed_lines": ["R1", "C2", "D1", ...]}
+```
+- `pass`: 10선 모두 합 34, 빈칸 없음
+- `fail`: 빈칸 없음, 합 ≠ 34인 줄이 1개 이상 → `failed_lines`에 해당 ID 전부
+- `incomplete`: 격자에 `0` 포함 → `failed_lines`는 `[]`
+- 대각선(D1·D2) 검사 생략 금지
+
+## TDD 규칙
+- 사이클: RED → GREEN → REFACTOR (순서 준수)
+- RED: `tests/`만 수정. `src/` 수정 금지
+- GREEN: 테스트 통과에 필요한 최소 구현만 `src/`에 추가
+- REFACTOR: 동작·테스트 불변. 공개 API·테스트 기대값 변경 금지
+- 금지: assert 완화, `@pytest.mark.skip`, `xfail`, 테스트 삭제로 통과 만들기
+- TDD 작업 시 응답 **첫 줄**에 Phase 선언 필수:
+  - `Phase: RED | Layer: command | Track: Logic`
+  - `Phase: GREEN | ...`
+  - `Phase: REFACTOR | ...`
+
+## Test Loop (참고)
+- T1 Green: 정답 완성 격자 → `pass`
+- T2 Red: 행/열 합 ≠ 34 → `fail`, 해당 `R*`/`C*` 포함
+- T3 Red: 빈칸(0) 포함 → `incomplete`
+- T4 Red: 대각선만 ≠ 34 → `fail`, `D1` 또는 `D2` 포함
+- T5 Red: 여러 줄 동시 실패 → 모든 틀린 줄 ID 반환
+
+## 범위 밖 (하지 않음)
+- Solver, 빈칸 자동 채우기, PyQt/UI
+- 1~16 중복·범위 검증 (후속 세션)
+- Mom Test 미검증 기능 선구현
+
+## AI 응답
+- 한국어로 답변
+- 코드·설계 제안은 위 도메인·API·TDD 규칙과 일치할 것
+- 불명확하면 질문 1개만. 솔루션 찬성 유도 질문 금지
+
+## Git
+- `git commit` / `git push`는 **사용자가 명시적으로 요청할 때만** 실행
+- `.env` 등 비밀 파일 커밋 금지
