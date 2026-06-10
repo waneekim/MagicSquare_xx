@@ -98,15 +98,215 @@ def validate_lines(grid: list[list[int]]) -> dict:
 
 ## Test Loop (세션 3)
 
-| ID | 유형 | 기대 |
-|----|------|------|
-| T1 | Green | `pass` |
-| T2 | Red | `fail`, `R*`/`C*` 포함 |
-| T3 | Red | `incomplete` |
-| T4 | Red | `fail`, `D1` 또는 `D2` |
-| T5 | Red | 복수 `failed_lines` |
+근거: [`docs/PRD.md` §7](docs/PRD.md#7-테스트-케이스-test-loop--세션-3) · 파일: `tests/test_validate_lines.py`
 
-파일: `tests/test_validate_lines.py`
+```bash
+python -m pytest tests/test_validate_lines.py -v
+```
+
+### 요약
+
+| ID | 유형 | 검증 의도 | 기대 `status` | 기대 `failed_lines` |
+|----|------|-----------|---------------|---------------------|
+| **T1** | Green | 정답 완성 격자 10선 통과 | `pass` | `[]` |
+| **T2** | Red | 행·열 합 ≠ 34 즉시 재현 | `fail` | `R2`, `C2` 포함 |
+| **T3** | Red | 빈칸(0) 있으면 완성 검증 불가 (R5) | `incomplete` | `[]` |
+| **T4** | Red | **대각선(D1·D2) 검사 누락 방지** (Mom Test) | `fail` | `D1` 또는 `D2` 포함 |
+| **T5** | Red | 복수 줄 동시 실패 — 누락 없이 전부 반환 | `fail` | 틀린 줄 ID **전부** |
+
+### AC 매핑
+
+| AC | 기준 | Test ID |
+|----|------|---------|
+| AC1 | 10선(행·열·**대각 2개**) 한 번에 검증 | T1, T4 |
+| AC2 | 합≠34 → `fail` + `failed_lines` | T2, T5 |
+| AC3 | 정답 완성 → `pass` | T1 |
+| AC4 | `0` 포함 → `incomplete` | T3 |
+| AC5 | Red·Green 자동 재현 | T1~T5 |
+| AC6 | 실패 줄 ID 명시 | T2, T4, T5 |
+
+### 실행 순서 (TDD)
+
+| 단계 | Test ID | 이유 |
+|------|---------|------|
+| 1 | **T2** | 첫 RED — 행·열 `fail` + `failed_lines` 계약 확립 |
+| 2 | T3 | `incomplete` 분기 (R5) |
+| 3 | T4 | 대각선 검사 필수 (Mom Test 핵심) |
+| 4 | T5 | 복수 `failed_lines` 누락 없음 |
+| 5 | **T1** | Green — 정답 `pass` 확정 |
+
+---
+
+## 테스트 플랜 (T1~T5)
+
+공통 **When:** `result = validate_lines(grid)`  
+공통 **Assert:** `result["status"]`, `result["failed_lines"]` (키 이름·10선 ID 고정)
+
+### T1 — Green · 정답 완성
+
+| 항목 | 내용 |
+|------|------|
+| **유형** | Green |
+| **Given** | PRD §2.4 과제 슬라이드 정답 4×4 (빈칸 없음) |
+| **When** | `validate_lines(grid)` |
+| **Then** | `status == "pass"`, `failed_lines == []` |
+| **AC** | AC3, AC5 |
+| **함수명 (권장)** | `test_t1_pass_on_complete_answer_grid` |
+
+```python
+grid_t1 = [
+    [16,  3,  2, 13],
+    [ 5, 10, 11,  8],
+    [ 9,  6,  7, 12],
+    [ 4, 15, 14,  1],
+]
+```
+
+| 10선 | 합 | 10선 | 합 |
+|------|-----|------|-----|
+| R1~R4 | 각 34 | C1~C4 | 각 34 |
+| D1 ↘ | 34 | D2 ↙ | 34 |
+
+---
+
+### T2 — Red · 행·열 교차 셀 변경
+
+| 항목 | 내용 |
+|------|------|
+| **유형** | Red |
+| **Given** | T1 기준, **R2∩C2** 교차 셀 `(1,1)` 값 `10→11` |
+| **When** | `validate_lines(grid)` |
+| **Then** | `status == "fail"`, `"R2" in failed_lines`, `"C2" in failed_lines` |
+| **AC** | AC2, AC6 |
+| **함수명 (권장)** | `test_t2_fail_r2_and_c2_when_intersection_cell_changed` |
+| **RED 실패** | 스텁 `...` → `AssertionError` |
+
+```python
+grid_t2 = [
+    [16,  3,  2, 13],
+    [ 5, 11, 11,  8],  # (1,1): 10→11 → R2·C2 동시 ≠34
+    [ 9,  6,  7, 12],
+    [ 4, 15, 14,  1],
+]
+```
+
+| 깨진 줄 | 합 | 비고 |
+|---------|-----|------|
+| R2 | 35 | 5+11+11+8 |
+| C2 | 35 | 3+11+6+15 |
+| D1, D2 | 34 | 대각선은 유지 — 행·열만 깨는 케이스 |
+
+---
+
+### T3 — Red · 빈칸(0) 포함
+
+| 항목 | 내용 |
+|------|------|
+| **유형** | Red |
+| **Given** | 완성 격자에 빈칸 `0` 1개 이상 (예: `(1,3)`) |
+| **When** | `validate_lines(grid)` |
+| **Then** | `status == "incomplete"`, `failed_lines == []` |
+| **AC** | AC4 |
+| **함수명 (권장)** | `test_t3_incomplete_when_blank_cell_exists` |
+| **Invariant** | R5 — `0 in grid`이면 10선 검사 없이 `incomplete` |
+
+```python
+grid_t3 = [
+    [16,  3,  2, 13],
+    [ 5, 10, 11,  0],  # (1,3) 빈칸
+    [ 9,  6,  7, 12],
+    [ 4, 15, 14,  1],
+]
+```
+
+---
+
+### T4 — Red · 대각선만 ≠ 34 (행·열은 34)
+
+| 항목 | 내용 |
+|------|------|
+| **유형** | Red |
+| **Given** | **반마방진** — 행·열 8선 합은 각 34, 대각선(D1·D2)만 ≠34 |
+| **When** | `validate_lines(grid)` |
+| **Then** | `status == "fail"`, `"D1" in failed_lines`, `"D2" in failed_lines` |
+| **AC** | AC1, AC6 — Mom Test: "대각선 하나를 빼먹어서" 방지 |
+| **함수명 (권장)** | `test_t4_fail_diagonals_when_rows_and_cols_are_34` |
+| **Invariant** | D1·D2 검사 **생략 금지** (`.cursorrules`) |
+
+```python
+# 행·열 34, D1=31, D2=49 (반마방진)
+grid_t4 = [
+    [ 7, 12,  1, 14],
+    [14,  8, 11,  1],
+    [ 2, 13,  8, 11],
+    [11,  1, 14,  8],
+]
+```
+
+| 10선 | 합 | 판정 |
+|------|-----|------|
+| R1~R4, C1~C4 | 각 34 | 통과 |
+| D1 ↘ | 31 | **실패** |
+| D2 ↙ | 49 | **실패** |
+
+> 행·열만 검산하면 "맞다"고 착각하는 상황을 재현한다. 구현은 **반드시 D1·D2**를 검사해야 T4·T1이 통과한다.
+
+---
+
+### T5 — Red · 여러 줄 동시 실패
+
+| 항목 | 내용 |
+|------|------|
+| **유형** | Red |
+| **Given** | T1 기준, 한 셀 변경으로 **R1·C1·D1** 동시 ≠34 |
+| **When** | `validate_lines(grid)` |
+| **Then** | `status == "fail"`, `failed_lines`에 `R1`, `C1`, `D1` **모두** 포함 (누락 없음) |
+| **AC** | AC2, AC6 |
+| **함수명 (권장)** | `test_t5_fail_multiple_lines_all_reported` |
+
+```python
+grid_t5 = [
+    [15,  3,  2, 13],  # (0,0): 16→15
+    [ 5, 10, 11,  8],
+    [ 9,  6,  7, 12],
+    [ 4, 15, 14,  1],
+]
+```
+
+| 깨진 줄 | 합 |
+|---------|-----|
+| R1 | 33 |
+| C1 | 33 |
+| D1 | 33 |
+
+**Assert 예시:**
+
+```python
+assert result["status"] == "fail"
+assert set(result["failed_lines"]) >= {"R1", "C1", "D1"}
+```
+
+---
+
+### C2C 요약표
+
+| Test ID | Given | When | Then |
+|---------|-------|------|------|
+| T1 | `grid_t1` (§2.4 정답) | `validate_lines(grid)` | `pass`, `[]` |
+| T2 | `grid_t2` (R2∩C2 셀 변경) | 동일 | `fail`, `R2`·`C2` ∈ `failed_lines` |
+| T3 | `grid_t3` (`0` 포함) | 동일 | `incomplete`, `[]` |
+| T4 | `grid_t4` (행·열 34, 대각 ≠34) | 동일 | `fail`, `D1`·`D2` ∈ `failed_lines` |
+| T5 | `grid_t5` (복수 줄 실패) | 동일 | `fail`, `R1`·`C1`·`D1` ⊆ `failed_lines` |
+
+### pytest 명령 (개별)
+
+```bash
+python -m pytest tests/test_validate_lines.py::test_t2_fail_r2_and_c2_when_intersection_cell_changed -v
+python -m pytest tests/test_validate_lines.py::test_t3_incomplete_when_blank_cell_exists -v
+python -m pytest tests/test_validate_lines.py::test_t4_fail_diagonals_when_rows_and_cols_are_34 -v
+python -m pytest tests/test_validate_lines.py::test_t5_fail_multiple_lines_all_reported -v
+python -m pytest tests/test_validate_lines.py::test_t1_pass_on_complete_answer_grid -v
+```
 
 ---
 
